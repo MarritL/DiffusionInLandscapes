@@ -1,4 +1,4 @@
-% Hoogh_2018 Initially used for Groundwater Flow Modele
+% Hoogh_2018 Initially used for Groundwater Flow Model
 % Based on Hooghoudt-situation
 % Modelling and Simulating 2018
 % Author: Willem Bouten (2015)
@@ -17,7 +17,7 @@ load DEM_Lux.txt
 PixX = 25; PixY = 25;           % Pixel length in X and Y-direction 	[m]
 [ny,nx]=size(DEM_Lux); 			% Number of Pixels in X and Y-direction [-]
 StartTime = 0;					% Start Time for simulation 			[year]
-EndTime = 400;			        % Time at which simulation Ends 		[year]
+EndTime = 4000;			        % Time at which simulation Ends 		[year]
 dt = 10;    					% calculation time step 				[year] 
 
 % System constrants after Minasny and McBratney (2001)
@@ -37,15 +37,48 @@ DEM_rock = DEM_Lux;             % Digital Elevation Model bedrock	    [m]
 FlowX(:,1:nx+1) = 0; 
 FlowY(1:ny+1,:) = 0;            % no flow (= erosion)                   [L3 L-1 t-1]
 
+% Initialisation soil balance variables
+TotSoil = sum(h(:));
+TotErosion = 0;
 
 % Auxillary constants
 x = [1:nx]*PixX-PixX/2;         % mid of x-grid                         [m]
 y = [1:ny]*PixY-PixY/2;         % mid of y-grid                         [m]
 
 % %%%%%%%%%%%% DYNAMIC LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
+while Time <= EndTime
 % 
-% while Time <= EndTime
-% 
+% Calc. Flow (erosion) in x-direction
+for j = 2:nx-1
+    for i = 1:ny
+        FlowX(i,j) = D*((DEM_soil(i,j-1)-(2*DEM_soil(i,j))+DEM_soil(i,j+1))/ ...
+            (PixX^2))*dt;
+    end
+end
+
+% Calc. Flow (erosion) in y-direction
+for j = 1:nx
+    for i = 2:ny-1
+        FlowY(i,j) = D*((DEM_soil(i-1,j)-(2*DEM_soil(i,j))+DEM_soil(i+1,j))/ ...
+            (PixY^2))*dt;
+    end
+end
+
+% Calc h with forward integration
+for j = 1:nx
+    for i = 1:ny
+        h(i,j) = h(i,j) + FlowX(i,j) + FlowY(i,j);
+    end
+end
+
+% Update DEM_soil (surface)
+DEM_soil = DEM_Lux + h;
+
+
+
+
+
+
 % % Calc. Flow in x-dir: Flow = -KA * dH/dx; (KA = K * average height of watercolumn * PixY)
 % KAX = K * PixY * (H(:,1:nx-1)-DEM_Clay(:,1:nx-1) + H(:,2:nx)-DEM_Clay(:,2:nx))/2;     %	[m3/dag]
 % FlowX(:,2:nx) = -1 * KAX .* (H(:,2:nx)-H(:,1:nx-1)) / PixX;                           %	[m3/day]
@@ -63,21 +96,37 @@ y = [1:ny]*PixY-PixY/2;         % mid of y-grid                         [m]
 % H(1:ny,2:nx-1) = H(1:ny,2:nx-1) + ...
 %                        (PrecRVol(1:ny,2:nx-1)+ NetFlow(1:ny,2:nx-1))* dt/ ...
 % 					   (PorVol*PixX*PixY);                                              %	[m]
-% Time = Time + dt;
-% if mod(Time,10)< dt,				% plot every 10 days
-%    subplot(2,1,1); contourf(x,y,H,20); 
+ Time = Time + dt;
+ 
+%  if mod(Time,10)< dt,				% plot every 10 days
+%    figure(5); contourf(x,y,h,20); colorbar;
 %    title('From above'); xlabel('distance [m]'); ylabel('distance [m]');
-%    subplot(2,1,2); plot(x,H(2,:)); ylim([0 1]); hold on 
+%    figure(4); 
+%    plot(DEM_soil(:,100), 'r'); 
+%    hold on
+%    plot(DEM_rock(:,100), 'k');
+%    plot(h(:,100), 'g')
+%    legend('surface', 'bedrock', 'soil-rock')
 %    title('Cross section'); 
-%    xlabel(' distance [m]'); ylabel('Groundwater level [m]');
+%    xlabel(' distance [m]'); ylabel('hight [m]');
 %    drawnow
-% end;
+%  end;
 % 
-% end %while Time <= EndTime
+ end %while Time <= EndTime
 % %%%%%%%%%%%% END DYNAMIC LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% calc. soil balance
+TotErosion = TotErosion + sum(FlowX(:)) + sum(FlowY(:));
+TotSoil = TotSoil - TotErosion;
 
 %figure(1)
 %contourf(DEM_soil); colorbar; xlabel('Nr gridcell x-direction'); ylabel('Nr gridcell y-direction')
+
+figure(1)
+contourf(h);
+colorbar;
+title('From above'); 
+xlabel('distance [m]'); ylabel('distance [m]');
 
 figure(2)
 mesh(rot90(DEM_soil,3)); colorbar;
@@ -86,5 +135,6 @@ figure(3)
 plot(DEM_soil(:,100), 'r'); 
 hold on
 plot(DEM_rock(:,100), 'k');
+plot(h(:,100)*10, 'g');
 legend('surface', 'bedrock');
 hold off
