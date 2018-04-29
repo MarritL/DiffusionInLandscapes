@@ -47,7 +47,7 @@ y = [1:ny]*PixY-PixY/2;         % mid of y-grid                         [m]
 
 % %%%%%%%%%%%% DYNAMIC LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%
 while Time <= EndTime
-% 
+ 
 % Calc. Flow (erosion) in x-direction
 for j = 2:nx-1
     for i = 1:ny
@@ -64,15 +64,37 @@ for j = 1:nx
     end
 end
 
+% Avoid negative soiltickness
+[FlowX, FlowY] = zerocheck((DEM_soil - DEM_rock), FlowX, FlowY);
+
+% Calculate chemical weathering
+for j = 1:nx
+    for i = 1:ny
+        W(i,j) = W0*(1-exp((-k1*h(i,j))));
+    end
+end
+
+% Calculate physical weathering
+for j = 1:nx
+    for i = 1:ny
+        P(i,j) = -P0*exp(-b*h(i,j));
+    end
+end
+
+% Add rockdensity and soildensity to physical weathering rate
+E(i,j) = (Pr/Ps)*P(i,j);
+
 % Calc h with forward integration
 for j = 1:nx
     for i = 1:ny
-        h(i,j) = h(i,j) + FlowX(i,j) + FlowY(i,j);
+        h(i,j) = h(i,j) + FlowX(i,j) + FlowY(i,j) - W(i,j);
     end
 end
 
 % Update DEM_soil (surface)
-DEM_soil = DEM_Lux + h;
+%DEM_rock = DEM_rock - E(i,j);
+%h = DEM_soil-DEM_rock;
+DEM_soil = DEM_rock + h;
 
 
 
@@ -98,7 +120,10 @@ DEM_soil = DEM_Lux + h;
 % 					   (PorVol*PixX*PixY);                                              %	[m]
  Time = Time + dt;
  
-%  if mod(Time,10)< dt,				% plot every 10 days
+  if mod(Time,100)< dt,				% plot every 100 years
+     figure(5);
+     plot(h(:,100));
+     hold on;
 %    figure(5); contourf(x,y,h,20); colorbar;
 %    title('From above'); xlabel('distance [m]'); ylabel('distance [m]');
 %    figure(4); 
@@ -109,8 +134,8 @@ DEM_soil = DEM_Lux + h;
 %    legend('surface', 'bedrock', 'soil-rock')
 %    title('Cross section'); 
 %    xlabel(' distance [m]'); ylabel('hight [m]');
-%    drawnow
-%  end;
+    drawnow
+  end;
 % 
  end %while Time <= EndTime
 % %%%%%%%%%%%% END DYNAMIC LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%
