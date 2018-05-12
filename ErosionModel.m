@@ -17,11 +17,11 @@ load DEM_Lux.txt
 PixX = 25; PixY = 25;           % Pixel length in X and Y-direction 	[m]
 [ny,nx]=size(DEM_Lux); 			% Number of Pixels in X and Y-direction [-]
 StartTime = 0;					% Start Time for simulation 			[year]
-EndTime = 4000;			        % Time at which simulation Ends 		[year]
-dt = 10;    					% calculation time step 				[year] 
+EndTime = 2000;			        % Time at which simulation Ends 		[year]
+dt = 1;    					% calculation time step 				[year] 
 
-% System constrants after Minasny and McBratney (2001)
-D = 0.008;                      % Erosive diffusitivity of material     [L2/T]
+% System constants after Minasny and McBratney (2001)
+D = 0.08;                      % Erosive diffusitivity of material     [L2/T]
 P0 = 1E-3;                      % Potential physical weathering rate    [m/year]
 b = 1.5;                        % Empirical constant weathering         [/L]
 W0 = 1.6E-3;                    % Potential chemical weathering rate    [m/year]
@@ -51,6 +51,7 @@ while Time <= EndTime
 % Calc. Flow (erosion) in x-direction
 for j = 2:nx-1
     for i = 1:ny
+        %DAX(i,j) = D * PixY * (h(i,j)+h(i,j-1))/2;
         FlowX(i,j) = D*((DEM_soil(i,j-1)-(2*DEM_soil(i,j))+DEM_soil(i,j+1))/ ...
             (PixX^2))*dt;
     end
@@ -59,6 +60,7 @@ end
 % Calc. Flow (erosion) in y-direction
 for j = 1:nx
     for i = 2:ny-1
+        %DAY(i,j) = D * PixY * (h(i,j)+h(i-1,j))/2;
         FlowY(i,j) = D*((DEM_soil(i-1,j)-(2*DEM_soil(i,j))+DEM_soil(i+1,j))/ ...
             (PixY^2))*dt;
     end
@@ -70,32 +72,37 @@ end
 % Calculate chemical weathering
 for j = 1:nx
     for i = 1:ny
-        W(i,j) = W0*(1-exp((-k1*h(i,j))));
+        if (h(i,j) > 0)
+            W(i,j) = W0*(1-exp((-k1*h(i,j))))*dt;
+        end
     end
 end
 
 % Calculate physical weathering
 for j = 1:nx
     for i = 1:ny
-        P(i,j) = -P0*exp(-b*h(i,j));
+        if h(i,j) > 0
+            P(i,j) = -P0*exp(-b*h(i,j))*dt;
+        end
     end
 end
 
 % Add rockdensity and soildensity to physical weathering rate
-E(i,j) = (Pr/Ps)*P(i,j);
+E(i,j) = -(Pr/Ps)*P(i,j);
 
 % Calc h with forward integration
-for j = 1:nx
-    for i = 1:ny
-        h(i,j) = h(i,j) + FlowX(i,j) + FlowY(i,j) - W(i,j);
+for j = 2:nx
+    for i = 2:ny
+        netFlow(i,j)= FlowX(i,j-1)-FlowX(i,j+1)+FlowY(i-1,j)-FlowY(i+1,j);
+        h(i,j) = h(i,j) + netFlow(i,j) ;
     end
 end
 
 % Update DEM_soil (surface)
-%DEM_rock = DEM_rock - E(i,j);
-%h = DEM_soil-DEM_rock;
-DEM_soil = DEM_rock + h;
-
+DEM_rock = DEM_rock - E(i,j);
+DEM_soil = DEM_rock + E(i,j) + h - W(i,j);
+h = DEM_soil-DEM_rock;
+% DEM_soil = DEM_rock + h;
 
 
 
@@ -120,10 +127,23 @@ DEM_soil = DEM_rock + h;
 % 					   (PorVol*PixX*PixY);                                              %	[m]
  Time = Time + dt;
  
-  if mod(Time,100)< dt,				% plot every 100 years
-     figure(5);
-     plot(h(:,100));
-     hold on;
+ if mod(Time,100)==0
+        figure(10); 
+        set(gcf,'Position', [0 0 1600 1600]);
+        title ([num2str(Time)])
+        %subplot(1,2,1),
+        imagesc(h, [0 10]); colorbar; title(['Soil Thickness,  time = ' ,num2str(Time)]);
+
+        %subplot(1,2,2),
+        %imagesc(e,[150 450]); colorbar; title('Dynamic DEM');
+
+        drawnow;
+ 
+%   if mod(Time,1000)< dt,				% plot every 100 years
+     
+%      figure(5);
+%      plot(h(:,100));
+%      hold on;
 %    figure(5); contourf(x,y,h,20); colorbar;
 %    title('From above'); xlabel('distance [m]'); ylabel('distance [m]');
 %    figure(4); 
@@ -154,7 +174,9 @@ title('From above');
 xlabel('distance [m]'); ylabel('distance [m]');
 
 figure(2)
-mesh(rot90(DEM_soil,3)); colorbar;
+%mesh(rot90(DEM_soil,3)); 
+%hold on
+mesh(h); colorbar;
 
 figure(3)
 plot(DEM_soil(:,100), 'r'); 
